@@ -40,9 +40,9 @@ function barChart(container, { labels, values, color = "#C1652F", format }) {
   container.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">${grid}${bars}${labelsSvg}</svg>`;
 }
 
-function hBarChart(container, { labels, values, color = "#C1652F", format }) {
+function hBarChart(container, { labels, values, color = "#C1652F", colors, format, labelWidth = 130 }) {
   if (!values || !values.length) return emptyChart(container);
-  const W = 460, rowH = 34, padL = 10, padR = 60, labelW = 130;
+  const W = 460, rowH = 34, padL = 10, padR = 60, labelW = labelWidth;
   const H = rowH * values.length + 20;
   const max = Math.max(1, ...values.map((v) => v || 0));
   const plotW = W - labelW - padR;
@@ -50,8 +50,9 @@ function hBarChart(container, { labels, values, color = "#C1652F", format }) {
   values.forEach((v, i) => {
     const w = max > 0 ? ((v || 0) / max) * plotW : 0;
     const y = 10 + i * rowH;
+    const barColor = (colors && colors[i]) || color;
     bars += `<text x="${labelW - 8}" y="${y + rowH * 0.55}" font-size="10" fill="#1E2761" text-anchor="end" font-family="Tahoma, sans-serif">${labels[i]}</text>`;
-    bars += `<rect x="${labelW}" y="${y + rowH * 0.18}" width="${w.toFixed(1)}" height="${rowH * 0.5}" fill="${color}" rx="2"/>`;
+    bars += `<rect x="${labelW}" y="${y + rowH * 0.18}" width="${w.toFixed(1)}" height="${rowH * 0.5}" fill="${barColor}" rx="2"/>`;
     bars += `<text x="${labelW + w + 6}" y="${y + rowH * 0.55}" font-size="9.5" fill="#1E2761" text-anchor="start" font-family="Tahoma, sans-serif">${format ? format(v) : fmtShort(v)}</text>`;
   });
   container.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">${bars}</svg>`;

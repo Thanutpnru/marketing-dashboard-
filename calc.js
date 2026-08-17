@@ -278,15 +278,20 @@ function summarizeQuotations(quotations) {
   const byChannelMap = {};
   qs.forEach((q) => {
     const c = q.channel || "ไม่ระบุ";
-    if (!byChannelMap[c]) byChannelMap[c] = { channel: c, count: 0, value: 0 };
+    if (!byChannelMap[c]) byChannelMap[c] = { channel: c, count: 0, value: 0, wonCount: 0, wonValue: 0 };
     byChannelMap[c].count += 1;
     byChannelMap[c].value += num(q.value);
+    if (QUOTE_STATUS_WON.includes(q.status)) {
+      byChannelMap[c].wonCount += 1;
+      byChannelMap[c].wonValue += num(q.value);
+    }
   });
   const byChannel = Object.values(byChannelMap)
     .map((c) => ({
       ...c,
       pctCount: n > 0 ? (c.count / n) * 100 : 0,
       pctValue: totalValue > 0 ? (c.value / totalValue) * 100 : 0,
+      closeRate: c.count > 0 ? (c.wonCount / c.count) * 100 : 0,
     }))
     .sort((a, b) => b.count - a.count);
 

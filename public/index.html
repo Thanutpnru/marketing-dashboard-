@@ -169,9 +169,18 @@
           <div class="chart-card"><h3>จำนวนใบเสนอราคารายเดือน (แท่ง) เทียบจำนวนที่ปิดได้ (เส้น)</h3><div id="chartQuoteCount" class="chart-canvas"></div></div>
           <div class="chart-card"><h3>มูลค่าใบเสนอราคารายเดือน (ล้านบาท)</h3><div id="chartQuoteValue" class="chart-canvas"></div></div>
           <div class="chart-card"><h3>% อัตราการปิดใบเสนอราคาได้รายเดือน</h3><div id="chartQuoteCloseRate" class="chart-canvas"></div></div>
+        </div>
+        <div id="quotesTrendInsight" class="insight-box"></div>
+
+        <h3 style="margin-top:8px">ประสิทธิภาพตามช่องทาง (Channel Effectiveness)</h3>
+        <p class="hint" style="margin-top:-4px">ช่องทางที่มีจำนวนใบน้อยเกินไป (ตัวอย่างน้อย) จะถูกรวมเป็นหมวด "อื่นๆ (ตัวอย่างน้อย)" ในกราฟด้านล่าง เพื่อไม่ให้อัตราปิดการขายที่คำนวณจากใบไม่กี่ใบทำให้เข้าใจผิด — ดูรายละเอียดรายช่องทางแบบเต็มได้ในตารางด้านล่าง</p>
+        <div class="chart-grid">
           <div class="chart-card"><h3>สัดส่วนช่องทางที่มาของใบเสนอราคา (จำนวนใบ)</h3><div id="chartQuoteChannel" class="chart-canvas"></div></div>
           <div class="chart-card"><h3>สถานะใบเสนอราคา</h3><div id="chartQuoteStatus" class="chart-canvas"></div></div>
+          <div class="chart-card wide"><h3>อัตราการปิดการขายแยกตามช่องทาง (% Close Rate)</h3><div id="chartQuoteChannelClose" class="chart-canvas"></div></div>
         </div>
+        <div id="quotesChannelInsight" class="insight-box"></div>
+
         <h3 style="margin-top:8px">รายละเอียดตามช่องทาง</h3>
         <div style="overflow-x:auto"><table id="quoteChannelTable" class="data-table"></table></div>
       </div>

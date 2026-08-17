@@ -277,9 +277,12 @@ function renderQuotesTab() {
     labels, values: qs.byMonth.map((m) => Math.round(m.closeRate * 10) / 10), color: PALETTE.navy, format: (v) => v.toFixed(0) + "%",
   });
 
-  const channelColors = [PALETTE.navy, PALETTE.terra, PALETTE.ice, PALETTE.gray, "#6B8F71", "#D9A441", "#8E5572", "#4C6E5D"];
+  // Group channels that make up a small sliver of total volume into "อื่นๆ" so
+  // donut/close-rate charts stay readable and aren't skewed by tiny sample sizes.
+  const groupedChannels = groupSmallChannels(qs.byChannel, qs.n, 2);
+  const channelColors = [PALETTE.navy, PALETTE.terra, PALETTE.ice, "#6B8F71", "#D9A441", "#8E5572", "#4C6E5D", PALETTE.gray];
   donutChart(document.getElementById("chartQuoteChannel"), {
-    labels: qs.byChannel.map((c) => c.channel), values: qs.byChannel.map((c) => c.count), colors: channelColors,
+    labels: groupedChannels.map((c) => c.channel), values: groupedChannels.map((c) => c.count), colors: channelColors,
   });
 
   const statusColors = { "ปิดการขายแล้ว": "#1E7A34", "ปิดการขายไม่ได้": "#B3261E", "ยกเลิก": "#9AA7C2", "รอลูกค้าตัดสินใจ": PALETTE.terra, "ประมูลงาน": PALETTE.navy };
@@ -287,6 +290,19 @@ function renderQuotesTab() {
     labels: qs.byStatus.map((s) => s.status),
     values: qs.byStatus.map((s) => s.count),
     colors: qs.byStatus.map((s) => statusColors[s.status] || PALETTE.gray),
+  });
+
+  // Channel effectiveness: sort by close rate (best first), "อื่นๆ" bucket pinned to the bottom
+  // since it's a mix of channels rather than one comparable thing.
+  const others = groupedChannels.find((c) => c.isOther);
+  const closeRanked = groupedChannels.filter((c) => !c.isOther).sort((a, b) => b.closeRate - a.closeRate);
+  const closeChartList = others ? [...closeRanked, others] : closeRanked;
+  hBarChart(document.getElementById("chartQuoteChannelClose"), {
+    labels: closeChartList.map((c) => `${c.channel} (${fmtInt(c.count)} ใบ)`),
+    values: closeChartList.map((c) => Math.round(c.closeRate * 10) / 10),
+    colors: closeChartList.map((c) => (c.isOther ? PALETTE.gray : c.closeRate >= qs.winRate ? "#1E7A34" : "#B3261E")),
+    format: (v) => v.toFixed(0) + "%",
+    labelWidth: 190,
   });
 
   const table = document.getElementById("quoteChannelTable");
@@ -297,12 +313,99 @@ function renderQuotesTab() {
       <td style="text-align:right">${fmtPct(c.pctCount, 1)}</td>
       <td style="text-align:right">฿${fmtInt(c.value)}</td>
       <td style="text-align:right">${fmtPct(c.pctValue, 1)}</td>
+      <td style="text-align:right">${fmtInt(c.wonCount)}</td>
+      <td style="text-align:right">${fmtPct(c.closeRate, 1)}</td>
     </tr>
   `).join("");
   table.innerHTML = `
-    <tr><th>ช่องทาง</th><th>จำนวนใบ</th><th>% ของจำนวน</th><th>มูลค่ารวม</th><th>% ของมูลค่า</th></tr>
+    <tr><th>ช่องทาง</th><th>จำนวนใบ</th><th>% ของจำนวน</th><th>มูลค่ารวม</th><th>% ของมูลค่า</th><th>ปิดได้</th><th>% ปิดได้</th></tr>
     ${rows}
   `;
+
+  renderQuotesInsights(qs, closeRanked, others);
+}
+
+// Merge channels below `thresholdPct` share of total count into a single "อื่นๆ" bucket
+// so pie/bar charts aren't cluttered by many near-invisible slivers.
+function groupSmallChannels(byChannel, totalCount, thresholdPct) {
+  const big = [];
+  const small = [];
+  byChannel.forEach((c) => {
+    const pct = totalCount > 0 ? (c.count / totalCount) * 100 : 0;
+    (pct >= thresholdPct ? big : small).push(c);
+  });
+  if (!small.length) return big;
+  const merged = small.reduce((acc, c) => {
+    acc.count += c.count;
+    acc.value += c.value;
+    acc.wonCount += c.wonCount;
+    acc.wonValue += c.wonValue;
+    acc.members.push(c.channel);
+    return acc;
+  }, { channel: "อื่นๆ (ช่องทางสัดส่วนน้อย)", count: 0, value: 0, wonCount: 0, wonValue: 0, members: [], isOther: true });
+  merged.pctCount = totalCount > 0 ? (merged.count / totalCount) * 100 : 0;
+  merged.closeRate = merged.count > 0 ? (merged.wonCount / merged.count) * 100 : 0;
+  return [...big, merged];
+}
+
+function renderQuotesInsights(qs, closeRanked, others) {
+  // Trend commentary: compare first half vs second half of the period to describe direction.
+  const trendEl = document.getElementById("quotesTrendInsight");
+  const trendBullets = [];
+  if (qs.byMonth.length >= 2) {
+    const mid = Math.ceil(qs.byMonth.length / 2);
+    const firstHalf = qs.byMonth.slice(0, mid);
+    const secondHalf = qs.byMonth.slice(mid);
+    const avg = (arr, key) => arr.reduce((s, m) => s + m[key], 0) / (arr.length || 1);
+    const volChange = avg(firstHalf, "count") > 0
+      ? ((avg(secondHalf, "count") - avg(firstHalf, "count")) / avg(firstHalf, "count")) * 100
+      : null;
+    if (volChange != null && Math.abs(volChange) >= 5) {
+      trendBullets.push(`จำนวนใบเสนอราคาต่อเดือนโดยเฉลี่ย${volChange > 0 ? "เพิ่มขึ้น" : "ลดลง"} ${fmtPct(Math.abs(volChange), 0)} เมื่อเทียบครึ่งแรกกับครึ่งหลังของช่วงเวลาที่เลือก`);
+    } else if (volChange != null) {
+      trendBullets.push("จำนวนใบเสนอราคาต่อเดือนค่อนข้างทรงตัวตลอดช่วงเวลาที่เลือก");
+    }
+    const crFirst = avg(firstHalf, "closeRate");
+    const crSecond = avg(secondHalf, "closeRate");
+    const crDiff = crSecond - crFirst;
+    if (Math.abs(crDiff) >= 3) {
+      trendBullets.push(`อัตราปิดการขายเฉลี่ย${crDiff > 0 ? "ดีขึ้น" : "แย่ลง"}จาก ${fmtPct(crFirst, 0)} เป็น ${fmtPct(crSecond, 0)} เมื่อเทียบครึ่งแรกกับครึ่งหลัง`);
+    }
+    const bestMonth = [...qs.byMonth].sort((a, b) => b.closeRate - a.closeRate)[0];
+    const worstMonth = [...qs.byMonth].sort((a, b) => a.closeRate - b.closeRate)[0];
+    if (bestMonth && worstMonth && bestMonth !== worstMonth) {
+      const label = (m) => `${THAI_MONTHS[m.month - 1]} ${m.year + 543}`;
+      trendBullets.push(`เดือนที่ปิดการขายได้ดีที่สุดคือ ${label(bestMonth)} (${fmtPct(bestMonth.closeRate, 0)}) ส่วนเดือนที่ต่ำที่สุดคือ ${label(worstMonth)} (${fmtPct(worstMonth.closeRate, 0)})`);
+    }
+  }
+  trendEl.innerHTML = trendBullets.length
+    ? `<div class="title">ข้อสังเกตแนวโน้มรายเดือน</div><ul>${trendBullets.map((b) => `<li>${b}</li>`).join("")}</ul>`
+    : "";
+
+  // Channel commentary: only compare channels with a meaningful sample size (>=5 quotes)
+  // so a single-quote channel at 100%/0% doesn't distort the "best/worst" read.
+  const chEl = document.getElementById("quotesChannelInsight");
+  const chBullets = [];
+  const meaningful = closeRanked.filter((c) => c.count >= 5);
+  const topVolume = [...qs.byChannel].sort((a, b) => b.count - a.count)[0];
+  if (topVolume) {
+    chBullets.push(`ช่องทางที่มีจำนวนใบเสนอราคามากที่สุดคือ "${topVolume.channel}" คิดเป็น ${fmtPct(topVolume.pctCount, 0)} ของทั้งหมด (${fmtInt(topVolume.count)} ใบ)`);
+  }
+  if (meaningful.length) {
+    const best = meaningful[0];
+    chBullets.push(`ช่องทางที่มีประสิทธิภาพสูงสุด (อัตราปิดการขาย) คือ "${best.channel}" ที่ ${fmtPct(best.closeRate, 0)} จาก ${fmtInt(best.count)} ใบ`);
+    const worst = meaningful[meaningful.length - 1];
+    if (worst !== best) {
+      const flag = worst.closeRate < qs.winRate ? " ซึ่งต่ำกว่าอัตราปิดการขายเฉลี่ยรวม ควรพิจารณาทบทวนแนวทางของช่องทางนี้" : "";
+      chBullets.push(`ช่องทางที่มีอัตราปิดการขายต่ำสุด (ในกลุ่มที่มีจำนวนใบมากพอจะเทียบได้) คือ "${worst.channel}" ที่ ${fmtPct(worst.closeRate, 0)} จาก ${fmtInt(worst.count)} ใบ${flag}`);
+    }
+  }
+  if (others && others.count > 0) {
+    chBullets.push(`มี ${others.members.length} ช่องทางที่มีจำนวนใบน้อย (รวมกัน ${fmtInt(others.count)} ใบ, ${fmtPct(others.pctCount, 0)} ของทั้งหมด) ถูกจัดกลุ่มเป็น "อื่นๆ" ในกราฟด้านบนเพื่อความชัดเจน ได้แก่ ${others.members.join(", ")}`);
+  }
+  chEl.innerHTML = chBullets.length
+    ? `<div class="title">ข้อสังเกตประสิทธิภาพตามช่องทาง</div><ul>${chBullets.map((b) => `<li>${b}</li>`).join("")}</ul>`
+    : "";
 }
 
 document.getElementById("importQuotesBtn").addEventListener("click", () => {
