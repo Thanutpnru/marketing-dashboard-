@@ -119,3 +119,51 @@ function donutChart(container, { labels, values, colors }) {
       <div style="display:flex;flex-wrap:wrap;justify-content:center;margin-top:8px;max-width:100%">${legend}</div>
     </div>`;
 }
+
+// Bars (primary series) with a line overlaid (secondary series) sharing the same y-axis scale —
+// used for "total quotes per month" (bars) vs "won quotes per month" (line).
+function barLineChart(container, { labels, barValues, lineValues, barColor = "#1E2761", lineColor = "#C1652F", barLabel = "", lineLabel = "", format }) {
+  if (!barValues || !barValues.length) return emptyChart(container);
+  const W = 420, H = 240, padL = 46, padR = 12, padT = 30, padB = 34;
+  const max = Math.max(1, ...barValues.map((v) => v || 0), ...(lineValues || []).map((v) => v || 0));
+  const n = barValues.length;
+  const plotW = W - padL - padR;
+  const bw = plotW / n;
+  const scaleY = (v) => H - padB - ((v || 0) / max) * (H - padT - padB);
+  let grid = "", bars = "", labelsSvg = "";
+  const gridLines = 4;
+  for (let g = 0; g <= gridLines; g++) {
+    const y = padT + (H - padT - padB) * (1 - g / gridLines);
+    const val = (max * g) / gridLines;
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#E4E9F2" stroke-width="1"/>`;
+    grid += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" font-size="9" fill="#5B6472" text-anchor="end" font-family="Tahoma, sans-serif">${fmtShort(val)}</text>`;
+  }
+  const centers = [];
+  barValues.forEach((v, i) => {
+    const h = max > 0 ? ((v || 0) / max) * (H - padT - padB) : 0;
+    const x = padL + i * bw + bw * 0.18;
+    const w = bw * 0.64;
+    const y = H - padB - h;
+    centers.push(x + w / 2);
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${barColor}" rx="2"/>`;
+    bars += `<text x="${(x + w / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" font-size="8.5" fill="#1E2761" text-anchor="middle" font-family="Tahoma, sans-serif">${format ? format(v) : fmtShort(v)}</text>`;
+    labelsSvg += `<text x="${(x + w / 2).toFixed(1)}" y="${H - padB + 14}" font-size="9" fill="#5B6472" text-anchor="middle" font-family="Tahoma, sans-serif">${labels[i]}</text>`;
+  });
+  let line = "", dots = "";
+  if (lineValues && lineValues.length) {
+    const pts = lineValues.map((v, i) => `${centers[i].toFixed(1)},${scaleY(v).toFixed(1)}`);
+    line = `<polyline points="${pts.join(" ")}" fill="none" stroke="${lineColor}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    lineValues.forEach((v, i) => {
+      const y = scaleY(v);
+      dots += `<circle cx="${centers[i].toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="${lineColor}" stroke="#FFFFFF" stroke-width="1"/>`;
+      dots += `<text x="${centers[i].toFixed(1)}" y="${(y - 8).toFixed(1)}" font-size="8.5" fill="${lineColor}" text-anchor="middle" font-family="Tahoma, sans-serif" font-weight="700">${format ? format(v) : fmtShort(v)}</text>`;
+    });
+  }
+  const legend = (barLabel || lineLabel)
+    ? `<div style="display:flex;gap:14px;justify-content:center;font-size:10.5px;color:#1E2761;margin-bottom:2px">
+        ${barLabel ? `<span><span style="display:inline-block;width:9px;height:9px;background:${barColor};border-radius:2px;margin-right:4px"></span>${barLabel}</span>` : ""}
+        ${lineLabel ? `<span><span style="display:inline-block;width:9px;height:9px;background:${lineColor};border-radius:50%;margin-right:4px"></span>${lineLabel}</span>` : ""}
+      </div>`
+    : "";
+  container.innerHTML = `<div style="display:flex;flex-direction:column;height:100%">${legend}<div style="flex:1;min-height:0"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">${grid}${bars}${line}${dots}${labelsSvg}</svg></div></div>`;
+}

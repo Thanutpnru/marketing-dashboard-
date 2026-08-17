@@ -262,11 +262,17 @@ function summarizeQuotations(quotations) {
   const byMonthMap = {};
   qs.forEach((q) => {
     const id = quoteMonthId(q);
-    if (!byMonthMap[id]) byMonthMap[id] = { id, year: num(q.year), month: num(q.month), count: 0, value: 0 };
+    if (!byMonthMap[id]) byMonthMap[id] = { id, year: num(q.year), month: num(q.month), count: 0, value: 0, wonCount: 0, wonValue: 0 };
     byMonthMap[id].count += 1;
     byMonthMap[id].value += num(q.value);
+    if (QUOTE_STATUS_WON.includes(q.status)) {
+      byMonthMap[id].wonCount += 1;
+      byMonthMap[id].wonValue += num(q.value);
+    }
   });
-  const byMonth = Object.values(byMonthMap).sort((a, b) => a.year - b.year || a.month - b.month);
+  const byMonth = Object.values(byMonthMap)
+    .map((m) => ({ ...m, closeRate: m.count > 0 ? (m.wonCount / m.count) * 100 : 0 }))
+    .sort((a, b) => a.year - b.year || a.month - b.month);
   const multiYear = new Set(byMonth.map((m) => m.year)).size > 1;
 
   const byChannelMap = {};
@@ -301,7 +307,9 @@ function summarizeQuotations(quotations) {
   const lostCount = lostList.length;
   const wonValue = wonList.reduce((s, q) => s + num(q.value), 0);
   const decidedCount = wonCount + lostCount;
-  const winRate = decidedCount > 0 ? (wonCount / decidedCount) * 100 : null;
+  // Win rate = closed-won ÷ ALL quotations (not just decided ones) per how the team wants to read it.
+  const winRate = n > 0 ? (wonCount / n) * 100 : null;
+  const avgWonValue = wonCount > 0 ? wonValue / wonCount : null;
 
   const years = [...new Set(qs.map((q) => String(q.year)))].sort();
 
@@ -317,6 +325,8 @@ function summarizeQuotations(quotations) {
     lostCount,
     wonValue,
     winRate,
+    avgWonValue,
+    decidedCount,
     monthCount: byMonth.length,
     years,
   };

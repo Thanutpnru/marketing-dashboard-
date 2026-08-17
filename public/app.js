@@ -255,17 +255,26 @@ function renderQuotesTab() {
   cardsEl.appendChild(statCardEl(fmtInt(qs.n), `ใบเสนอราคาทั้งหมด (${qs.monthCount} เดือน)`));
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.totalValue)}`, "มูลค่าใบเสนอราคารวม"));
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgValue)}`, "มูลค่าเฉลี่ยต่อใบ"));
+  cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgWonValue)}`, "มูลค่าเฉลี่ยใบเสนอราคาที่ปิดได้"));
   cardsEl.appendChild(statCardEl(
     qs.winRate == null ? "-" : fmtPct(qs.winRate, 0),
-    `อัตราปิดการขาย (${fmtInt(qs.wonCount)} ปิดได้ / ${fmtInt(qs.wonCount + qs.lostCount)} ที่ตัดสินใจแล้ว)`
+    `อัตราปิดการขาย (${fmtInt(qs.wonCount)} ปิดได้ / ${fmtInt(qs.n)} ใบทั้งหมด)`
   ));
 
   const labels = qs.byMonth.map((m) => (qs.multiYear ? `${THAI_MONTHS[m.month - 1]} '${String(m.year + 543).slice(-2)}` : THAI_MONTHS[m.month - 1]));
-  barChart(document.getElementById("chartQuoteCount"), {
-    labels, values: qs.byMonth.map((m) => m.count), color: PALETTE.navy, format: (v) => fmtInt(v),
+  barLineChart(document.getElementById("chartQuoteCount"), {
+    labels,
+    barValues: qs.byMonth.map((m) => m.count),
+    lineValues: qs.byMonth.map((m) => m.wonCount),
+    barColor: PALETTE.navy, lineColor: PALETTE.terra,
+    barLabel: "ใบเสนอราคาทั้งหมด", lineLabel: "ปิดการขายได้",
+    format: (v) => fmtInt(v),
   });
   barChart(document.getElementById("chartQuoteValue"), {
     labels, values: qs.byMonth.map((m) => m.value / 1e6), color: PALETTE.terra, format: (v) => v.toFixed(1),
+  });
+  lineChart(document.getElementById("chartQuoteCloseRate"), {
+    labels, values: qs.byMonth.map((m) => Math.round(m.closeRate * 10) / 10), color: PALETTE.navy, format: (v) => v.toFixed(0) + "%",
   });
 
   const channelColors = [PALETTE.navy, PALETTE.terra, PALETTE.ice, PALETTE.gray, "#6B8F71", "#D9A441", "#8E5572", "#4C6E5D"];
