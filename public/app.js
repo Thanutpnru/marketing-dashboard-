@@ -2,7 +2,7 @@
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "" };
+const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "", quoteChannelSort: { key: "count", dir: "desc" } };
 
 function fmtInt(n) { return n == null || !isFinite(n) ? "-" : Math.round(n).toLocaleString("en-US"); }
 function fmtMoney(n, d = 2) { return n == null || !isFinite(n) ? "-" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -305,24 +305,60 @@ function renderQuotesTab() {
     labelWidth: 190,
   });
 
-  const table = document.getElementById("quoteChannelTable");
-  const rows = qs.byChannel.map((c) => `
-    <tr>
-      <td>${c.channel}</td>
-      <td style="text-align:right">${fmtInt(c.count)}</td>
-      <td style="text-align:right">${fmtPct(c.pctCount, 1)}</td>
-      <td style="text-align:right">฿${fmtInt(c.value)}</td>
-      <td style="text-align:right">${fmtPct(c.pctValue, 1)}</td>
-      <td style="text-align:right">${fmtInt(c.wonCount)}</td>
-      <td style="text-align:right">${fmtPct(c.closeRate, 1)}</td>
-    </tr>
-  `).join("");
-  table.innerHTML = `
-    <tr><th>ช่องทาง</th><th>จำนวนใบ</th><th>% ของจำนวน</th><th>มูลค่ารวม</th><th>% ของมูลค่า</th><th>ปิดได้</th><th>% ปิดได้</th></tr>
-    ${rows}
-  `;
+  renderQuoteChannelTable(qs);
 
   renderQuotesInsights(qs, closeRanked, others);
+}
+
+const QUOTE_CHANNEL_COLUMNS = [
+  { key: "channel", label: "ช่องทาง", align: "left" },
+  { key: "count", label: "จำนวนใบ", align: "right", fmt: (c) => fmtInt(c.count) },
+  { key: "pctCount", label: "% ของจำนวน", align: "right", fmt: (c) => fmtPct(c.pctCount, 1) },
+  { key: "value", label: "มูลค่ารวม", align: "right", fmt: (c) => `฿${fmtInt(c.value)}` },
+  { key: "pctValue", label: "% ของมูลค่า", align: "right", fmt: (c) => fmtPct(c.pctValue, 1) },
+  { key: "wonCount", label: "ปิดได้", align: "right", fmt: (c) => fmtInt(c.wonCount) },
+  { key: "wonValue", label: "มูลค่าที่ปิดได้", align: "right", fmt: (c) => `฿${fmtInt(c.wonValue)}` },
+  { key: "closeRate", label: "% ปิดได้", align: "right", fmt: (c) => fmtPct(c.closeRate, 1) },
+];
+
+// Clickable, sortable channel-detail table. Clicking a header sorts by that column;
+// clicking the active column again flips the sort direction.
+function renderQuoteChannelTable(qs) {
+  const table = document.getElementById("quoteChannelTable");
+  const sort = state.quoteChannelSort;
+  const sorted = [...qs.byChannel].sort((a, b) => {
+    const av = a[sort.key];
+    const bv = b[sort.key];
+    if (typeof av === "string") {
+      return sort.dir === "asc" ? av.localeCompare(bv, "th") : bv.localeCompare(av, "th");
+    }
+    return sort.dir === "asc" ? av - bv : bv - av;
+  });
+
+  const headCells = QUOTE_CHANNEL_COLUMNS.map((col) => {
+    const active = sort.key === col.key;
+    const arrow = active ? (sort.dir === "asc" ? " ▲" : " ▼") : "";
+    return `<th data-sort-key="${col.key}" style="cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--terra)" : ""}" title="คลิกเพื่อเรียงลำดับ">${col.label}${arrow}</th>`;
+  }).join("");
+
+  const rows = sorted.map((c) => `
+    <tr>
+      ${QUOTE_CHANNEL_COLUMNS.map((col) => `<td style="text-align:${col.align}">${col.fmt ? col.fmt(c) : c[col.key]}</td>`).join("")}
+    </tr>
+  `).join("");
+
+  table.innerHTML = `<tr>${headCells}</tr>${rows}`;
+  table.querySelectorAll("th[data-sort-key]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort-key");
+      if (state.quoteChannelSort.key === key) {
+        state.quoteChannelSort.dir = state.quoteChannelSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.quoteChannelSort = { key, dir: key === "channel" ? "asc" : "desc" };
+      }
+      renderQuoteChannelTable(qs);
+    });
+  });
 }
 
 // Merge channels below `thresholdPct` share of total count into a single "อื่นๆ" bucket
