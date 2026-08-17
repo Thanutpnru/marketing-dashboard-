@@ -292,6 +292,7 @@ function summarizeQuotations(quotations) {
       pctCount: n > 0 ? (c.count / n) * 100 : 0,
       pctValue: totalValue > 0 ? (c.value / totalValue) * 100 : 0,
       closeRate: c.count > 0 ? (c.wonCount / c.count) * 100 : 0,
+      valueCloseRate: c.value > 0 ? (c.wonValue / c.value) * 100 : 0,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -315,6 +316,10 @@ function summarizeQuotations(quotations) {
   // Win rate = closed-won ÷ ALL quotations (not just decided ones) per how the team wants to read it.
   const winRate = n > 0 ? (wonCount / n) * 100 : null;
   const avgWonValue = wonCount > 0 ? wonValue / wonCount : null;
+  // Value-weighted win rate: what share of quoted BAHT (not just quote count) actually
+  // converts to closed-won revenue. This can diverge sharply from the count-based win rate
+  // when big-ticket quotes and small-ticket quotes close at very different rates.
+  const valueWinRate = totalValue > 0 ? (wonValue / totalValue) * 100 : null;
 
   const years = [...new Set(qs.map((q) => String(q.year)))].sort();
 
@@ -330,6 +335,7 @@ function summarizeQuotations(quotations) {
     lostCount,
     wonValue,
     winRate,
+    valueWinRate,
     avgWonValue,
     decidedCount,
     monthCount: byMonth.length,

@@ -2,7 +2,7 @@
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "", quoteChannelSort: { key: "count", dir: "desc" }, quoteChannel: "" };
+const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "", quoteChannelSort: { key: "count", dir: "desc" }, quoteChannel: [] };
 
 function fmtInt(n) { return n == null || !isFinite(n) ? "-" : Math.round(n).toLocaleString("en-US"); }
 function fmtMoney(n, d = 2) { return n == null || !isFinite(n) ? "-" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -17,11 +17,11 @@ function toast(msg, isError) {
 }
 
 // ---------- API ----------
-async function apiGet(from, to, channel) {
+async function apiGet(from, to, channels) {
   const qs = [];
   if (from) qs.push("from=" + encodeURIComponent(from));
   if (to) qs.push("to=" + encodeURIComponent(to));
-  if (channel) qs.push("channel=" + encodeURIComponent(channel));
+  if (channels && channels.length) qs.push("channel=" + encodeURIComponent(channels.join(",")));
   const r = await fetch("/api/data" + (qs.length ? "?" + qs.join("&") : ""));
   if (!r.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
   return r.json();
@@ -188,14 +188,63 @@ function populatePeriodSelectors() {
   });
 
   // Channel filter options come from the full unfiltered quotation list (state.data.quotations
-  // is always returned unfiltered by the server) so the dropdown doesn't shrink to just the
-  // currently-selected channel once a filter is applied.
-  const channelSel = document.getElementById("quoteChannelFilter");
+  // is always returned unfiltered by the server) so the panel doesn't shrink to just the
+  // currently-selected channels once a filter is applied.
   const channelNames = [...new Set((state.data.quotations || []).map((q) => q.channel || "ไม่ระบุ"))].sort((a, b) => a.localeCompare(b, "th"));
-  channelSel.innerHTML = `<option value="">ทุกช่องทาง</option>` + channelNames.map((c) => `<option value="${c}">${c}</option>`).join("");
-  channelSel.value = state.quoteChannel || "";
-  channelSel.disabled = channelNames.length === 0;
+  // Drop any selected channels that no longer exist in the data (e.g. after clearing/re-importing).
+  state.quoteChannel = state.quoteChannel.filter((c) => channelNames.includes(c));
+  const panel = document.getElementById("quoteChannelPanel");
+  panel.innerHTML = `
+    <div class="multiselect-actions">
+      <button type="button" id="quoteChannelSelectAll">เลือกทั้งหมด</button>
+      <button type="button" id="quoteChannelClearAll">ล้างตัวเลือก</button>
+    </div>
+    ${channelNames.map((c) => `
+      <label><input type="checkbox" value="${c}" ${state.quoteChannel.includes(c) ? "checked" : ""}> ${c}</label>
+    `).join("")}
+  `;
+  panel.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const selected = [...panel.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+      state.quoteChannel = selected;
+      updateQuoteChannelToggleLabel();
+      refresh().catch((err) => toast(err.message, true));
+    });
+  });
+  document.getElementById("quoteChannelSelectAll").addEventListener("click", () => {
+    panel.querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = true));
+    state.quoteChannel = [...channelNames];
+    updateQuoteChannelToggleLabel();
+    refresh().catch((err) => toast(err.message, true));
+  });
+  document.getElementById("quoteChannelClearAll").addEventListener("click", () => {
+    panel.querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = false));
+    state.quoteChannel = [];
+    updateQuoteChannelToggleLabel();
+    refresh().catch((err) => toast(err.message, true));
+  });
+  document.getElementById("quoteChannelToggle").disabled = channelNames.length === 0;
+  updateQuoteChannelToggleLabel();
 }
+
+function updateQuoteChannelToggleLabel() {
+  const btn = document.getElementById("quoteChannelToggle");
+  const n = state.quoteChannel.length;
+  if (n === 0) btn.textContent = "ทุกช่องทาง ▾";
+  else if (n === 1) btn.textContent = `${state.quoteChannel[0]} ▾`;
+  else btn.textContent = `เลือกแล้ว ${n} ช่องทาง ▾`;
+}
+
+document.getElementById("quoteChannelToggle").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("quoteChannelPanel").classList.toggle("open");
+});
+document.addEventListener("click", (e) => {
+  const ms = document.getElementById("quoteChannelMultiselect");
+  if (ms && !ms.contains(e.target)) {
+    document.getElementById("quoteChannelPanel").classList.remove("open");
+  }
+});
 
 function onPeriodFromChange(e) {
   state.periodFrom = e.target.value;
@@ -219,10 +268,6 @@ document.getElementById("slidePeriodReset").addEventListener("click", onPeriodRe
 document.getElementById("quotePeriodFrom").addEventListener("change", onPeriodFromChange);
 document.getElementById("quotePeriodTo").addEventListener("change", onPeriodToChange);
 document.getElementById("quotePeriodReset").addEventListener("click", onPeriodReset);
-document.getElementById("quoteChannelFilter").addEventListener("change", (e) => {
-  state.quoteChannel = e.target.value;
-  refresh().catch((err) => toast(err.message, true));
-});
 
 // ---------- Dashboard ----------
 function statCardEl(big, label) {
@@ -273,8 +318,14 @@ function renderQuotesTab() {
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgWonValue)}`, "มูลค่าเฉลี่ยใบเสนอราคาที่ปิดได้"));
   cardsEl.appendChild(statCardEl(
     qs.winRate == null ? "-" : fmtPct(qs.winRate, 0),
-    `อัตราปิดการขาย (${fmtInt(qs.wonCount)} ปิดได้ / ${fmtInt(qs.n)} ใบทั้งหมด)`
+    `อัตราปิดการขาย - นับจำนวนใบ (${fmtInt(qs.wonCount)} ปิดได้ / ${fmtInt(qs.n)} ใบทั้งหมด)`
   ));
+  cardsEl.appendChild(statCardEl(
+    qs.valueWinRate == null ? "-" : fmtPct(qs.valueWinRate, 1),
+    `อัตราปิดการขาย - ตามมูลค่า (฿${fmtInt(qs.wonValue)} / ฿${fmtInt(qs.totalValue)})`
+  ));
+
+  renderQuotesValueInsight(qs);
 
   const labels = qs.byMonth.map((m) => (qs.multiYear ? `${THAI_MONTHS[m.month - 1]} '${String(m.year + 543).slice(-2)}` : THAI_MONTHS[m.month - 1]));
   barLineChart(document.getElementById("chartQuoteCount"), {
@@ -401,7 +452,47 @@ function groupSmallChannels(byChannel, totalCount, thresholdPct) {
   }, { channel: "อื่นๆ (ช่องทางสัดส่วนน้อย)", count: 0, value: 0, wonCount: 0, wonValue: 0, members: [], isOther: true });
   merged.pctCount = totalCount > 0 ? (merged.count / totalCount) * 100 : 0;
   merged.closeRate = merged.count > 0 ? (merged.wonCount / merged.count) * 100 : 0;
+  merged.valueCloseRate = merged.value > 0 ? (merged.wonValue / merged.value) * 100 : 0;
   return [...big, merged];
+}
+
+// Explains the gap between count-based win rate ("what share of quotes convert") and
+// value-based win rate ("what share of quoted baht converts") — these two numbers can
+// diverge a lot when big-ticket and small-ticket quotes close at different rates.
+function renderQuotesValueInsight(qs) {
+  const el = document.getElementById("quotesValueInsight");
+  if (qs.winRate == null || qs.valueWinRate == null) {
+    el.innerHTML = "";
+    return;
+  }
+  const bullets = [];
+  bullets.push(
+    `อัตราปิดการขายแบบนับจำนวนใบอยู่ที่ ${fmtPct(qs.winRate, 1)} (ปิดได้ ${fmtInt(qs.wonCount)} จาก ${fmtInt(qs.n)} ใบ) ในขณะที่อัตราปิดการขายแบบมูลค่าอยู่ที่ ${fmtPct(qs.valueWinRate, 1)} ` +
+    `(ปิดได้ ฿${fmtInt(qs.wonValue)} จากมูลค่าที่เสนอทั้งหมด ฿${fmtInt(qs.totalValue)}) — ตัวแรกบอกว่า "ปิดได้กี่ใบ" ส่วนตัวหลังบอกว่า "ปิดได้กี่บาท" ซึ่งเป็นคนละมุมมอง`
+  );
+  const gap = qs.winRate - qs.valueWinRate;
+  if (Math.abs(gap) >= 3) {
+    if (gap > 0) {
+      bullets.push(`อัตราปิดแบบมูลค่าต่ำกว่าแบบนับจำนวนใบอยู่ ${fmtPct(gap, 1)} แปลว่าใบเสนอราคาที่ปิดได้ส่วนใหญ่มีมูลค่าต่อใบ "เล็กกว่า" ค่าเฉลี่ยของใบเสนอราคาทั้งหมด ส่วนใบมูลค่าสูง ๆ ยังปิดได้ไม่ค่อยดี`);
+    } else {
+      bullets.push(`อัตราปิดแบบมูลค่าสูงกว่าแบบนับจำนวนใบอยู่ ${fmtPct(-gap, 1)} แปลว่าใบเสนอราคาที่ปิดได้ส่วนใหญ่มีมูลค่าต่อใบ "ใหญ่กว่า" ค่าเฉลี่ย ทีมขายจับดีลก้อนใหญ่ได้ดี`);
+    }
+  } else {
+    bullets.push("อัตราปิดทั้งสองแบบใกล้เคียงกัน แปลว่าขนาดของใบเสนอราคาที่ปิดได้กับที่ปิดไม่ได้ไม่ต่างกันมาก");
+  }
+  // Flag channels where the value-based rate diverges most from the count-based rate
+  // (only channels with a large enough sample to be meaningful).
+  const divergent = (qs.byChannel || [])
+    .filter((c) => c.count >= 5)
+    .map((c) => ({ ...c, gap: c.closeRate - c.valueCloseRate }))
+    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))[0];
+  if (divergent && Math.abs(divergent.gap) >= 10) {
+    const dir = divergent.gap > 0
+      ? `ปิดได้ดีในแง่จำนวนใบ (${fmtPct(divergent.closeRate, 0)}) แต่ปิดได้น้อยในแง่มูลค่า (${fmtPct(divergent.valueCloseRate, 0)}) นั่นคือใบใหญ่ ๆ ของช่องทางนี้ยังปิดยาก`
+      : `ปิดได้ในแง่มูลค่า (${fmtPct(divergent.valueCloseRate, 0)}) สูงกว่าในแง่จำนวนใบ (${fmtPct(divergent.closeRate, 0)}) นั่นคือแม้จะปิดได้ไม่กี่ใบ แต่เป็นใบมูลค่าสูง`;
+    bullets.push(`ช่องทาง "${divergent.channel}" มีช่องว่างระหว่างสองอัตรานี้มากที่สุด — ${dir}`);
+  }
+  el.innerHTML = `<div class="title">ทำไมอัตราปิดการขาย 2 แบบถึงต่างกัน</div><ul>${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`;
 }
 
 function renderQuotesInsights(qs, closeRanked, others) {

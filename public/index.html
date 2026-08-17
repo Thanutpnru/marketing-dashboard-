@@ -160,14 +160,17 @@
           <select id="quotePeriodTo"></select>
         </label>
         <button type="button" class="secondary" id="quotePeriodReset">ดูทั้งหมด</button>
-        <label>ช่องทาง:
-          <select id="quoteChannelFilter"></select>
-        </label>
+        <label>ช่องทาง:</label>
+        <div class="multiselect" id="quoteChannelMultiselect">
+          <button type="button" class="multiselect-toggle" id="quoteChannelToggle">ทุกช่องทาง ▾</button>
+          <div class="multiselect-panel" id="quoteChannelPanel"></div>
+        </div>
       </div>
 
       <div id="quotesEmpty" class="empty-state" style="display:none"></div>
       <div id="quotesContent">
         <div id="quotesStatCards" class="stat-cards"></div>
+        <div id="quotesValueInsight" class="insight-box"></div>
         <div class="chart-grid">
           <div class="chart-card"><h3>จำนวนใบเสนอราคารายเดือน (แท่ง) เทียบจำนวนที่ปิดได้ (เส้น)</h3><div id="chartQuoteCount" class="chart-canvas"></div></div>
           <div class="chart-card"><h3>มูลค่าใบเสนอราคารายเดือน (แท่ง) เทียบมูลค่าที่ปิดได้ (เส้น) — ล้านบาท</h3><div id="chartQuoteValue" class="chart-canvas"></div></div>
