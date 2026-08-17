@@ -84,9 +84,10 @@ function filterMonthsByRange(months, from, to) {
   return months.filter((m) => (!from || m.id >= from) && (!to || m.id <= to));
 }
 
-function filterQuotationsByRange(quotations, from, to) {
+function filterQuotationsByRange(quotations, from, to, channel) {
   return quotations.filter((q) => {
     const id = quoteMonthId(q);
+    if (channel && q.channel !== channel) return false;
     return (!from || id >= from) && (!to || id <= to);
   });
 }
@@ -139,11 +140,12 @@ const server = http.createServer(async (req, res) => {
     const to = parsedUrl.searchParams.get("to") || "";
 
     if (url === "/api/data" && req.method === "GET") {
+      const channel = parsedUrl.searchParams.get("channel") || "";
       const data = readData();
       const filteredMonths = filterMonthsByRange(data.months, from, to);
       const summary = summarize({ months: filteredMonths, costItemsByYear: data.costItemsByYear });
       const summaryByYear = summarizeByYear(data); // always full data, ignores period filter
-      const filteredQuotations = filterQuotationsByRange(data.quotations, from, to);
+      const filteredQuotations = filterQuotationsByRange(data.quotations, from, to, channel);
       const quotationSummary = summarizeQuotations(filteredQuotations);
       return sendJSON(res, 200, { data, summary, summaryByYear, quotationSummary });
     }

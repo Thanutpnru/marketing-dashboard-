@@ -160,6 +160,9 @@
           <select id="quotePeriodTo"></select>
         </label>
         <button type="button" class="secondary" id="quotePeriodReset">ดูทั้งหมด</button>
+        <label>ช่องทาง:
+          <select id="quoteChannelFilter"></select>
+        </label>
       </div>
 
       <div id="quotesEmpty" class="empty-state" style="display:none"></div>
@@ -167,7 +170,7 @@
         <div id="quotesStatCards" class="stat-cards"></div>
         <div class="chart-grid">
           <div class="chart-card"><h3>จำนวนใบเสนอราคารายเดือน (แท่ง) เทียบจำนวนที่ปิดได้ (เส้น)</h3><div id="chartQuoteCount" class="chart-canvas"></div></div>
-          <div class="chart-card"><h3>มูลค่าใบเสนอราคารายเดือน (ล้านบาท)</h3><div id="chartQuoteValue" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>มูลค่าใบเสนอราคารายเดือน (แท่ง) เทียบมูลค่าที่ปิดได้ (เส้น) — ล้านบาท</h3><div id="chartQuoteValue" class="chart-canvas"></div></div>
           <div class="chart-card"><h3>% อัตราการปิดใบเสนอราคาได้รายเดือน</h3><div id="chartQuoteCloseRate" class="chart-canvas"></div></div>
         </div>
         <div id="quotesTrendInsight" class="insight-box"></div>

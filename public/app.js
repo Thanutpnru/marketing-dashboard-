@@ -2,7 +2,7 @@
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "", quoteChannelSort: { key: "count", dir: "desc" } };
+const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "", quoteChannelSort: { key: "count", dir: "desc" }, quoteChannel: "" };
 
 function fmtInt(n) { return n == null || !isFinite(n) ? "-" : Math.round(n).toLocaleString("en-US"); }
 function fmtMoney(n, d = 2) { return n == null || !isFinite(n) ? "-" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -17,10 +17,11 @@ function toast(msg, isError) {
 }
 
 // ---------- API ----------
-async function apiGet(from, to) {
+async function apiGet(from, to, channel) {
   const qs = [];
   if (from) qs.push("from=" + encodeURIComponent(from));
   if (to) qs.push("to=" + encodeURIComponent(to));
+  if (channel) qs.push("channel=" + encodeURIComponent(channel));
   const r = await fetch("/api/data" + (qs.length ? "?" + qs.join("&") : ""));
   if (!r.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
   return r.json();
@@ -52,7 +53,7 @@ async function apiDeleteCostYear(year) {
 
 // ---------- Init ----------
 async function refresh() {
-  const j = await apiGet(state.periodFrom, state.periodTo);
+  const j = await apiGet(state.periodFrom, state.periodTo, state.quoteChannel);
   state.data = j.data;
   state.summary = j.summary;
   state.summaryByYear = j.summaryByYear || [];
@@ -185,6 +186,15 @@ function populatePeriodSelectors() {
     }
     fromSel.disabled = toSel.disabled = ids.length === 0;
   });
+
+  // Channel filter options come from the full unfiltered quotation list (state.data.quotations
+  // is always returned unfiltered by the server) so the dropdown doesn't shrink to just the
+  // currently-selected channel once a filter is applied.
+  const channelSel = document.getElementById("quoteChannelFilter");
+  const channelNames = [...new Set((state.data.quotations || []).map((q) => q.channel || "ไม่ระบุ"))].sort((a, b) => a.localeCompare(b, "th"));
+  channelSel.innerHTML = `<option value="">ทุกช่องทาง</option>` + channelNames.map((c) => `<option value="${c}">${c}</option>`).join("");
+  channelSel.value = state.quoteChannel || "";
+  channelSel.disabled = channelNames.length === 0;
 }
 
 function onPeriodFromChange(e) {
@@ -209,6 +219,10 @@ document.getElementById("slidePeriodReset").addEventListener("click", onPeriodRe
 document.getElementById("quotePeriodFrom").addEventListener("change", onPeriodFromChange);
 document.getElementById("quotePeriodTo").addEventListener("change", onPeriodToChange);
 document.getElementById("quotePeriodReset").addEventListener("click", onPeriodReset);
+document.getElementById("quoteChannelFilter").addEventListener("change", (e) => {
+  state.quoteChannel = e.target.value;
+  refresh().catch((err) => toast(err.message, true));
+});
 
 // ---------- Dashboard ----------
 function statCardEl(big, label) {
@@ -254,6 +268,7 @@ function renderQuotesTab() {
   cardsEl.innerHTML = "";
   cardsEl.appendChild(statCardEl(fmtInt(qs.n), `ใบเสนอราคาทั้งหมด (${qs.monthCount} เดือน)`));
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.totalValue)}`, "มูลค่าใบเสนอราคารวม"));
+  cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.wonValue)}`, `มูลค่าใบเสนอราคาที่ปิดได้ (${fmtInt(qs.wonCount)} ใบ)`));
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgValue)}`, "มูลค่าเฉลี่ยต่อใบ"));
   cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgWonValue)}`, "มูลค่าเฉลี่ยใบเสนอราคาที่ปิดได้"));
   cardsEl.appendChild(statCardEl(
@@ -270,8 +285,13 @@ function renderQuotesTab() {
     barLabel: "ใบเสนอราคาทั้งหมด", lineLabel: "ปิดการขายได้",
     format: (v) => fmtInt(v),
   });
-  barChart(document.getElementById("chartQuoteValue"), {
-    labels, values: qs.byMonth.map((m) => m.value / 1e6), color: PALETTE.terra, format: (v) => v.toFixed(1),
+  barLineChart(document.getElementById("chartQuoteValue"), {
+    labels,
+    barValues: qs.byMonth.map((m) => m.value / 1e6),
+    lineValues: qs.byMonth.map((m) => m.wonValue / 1e6),
+    barColor: PALETTE.terra, lineColor: PALETTE.navy,
+    barLabel: "มูลค่ารวม", lineLabel: "มูลค่าที่ปิดได้",
+    format: (v) => v.toFixed(1),
   });
   lineChart(document.getElementById("chartQuoteCloseRate"), {
     labels, values: qs.byMonth.map((m) => Math.round(m.closeRate * 10) / 10), color: PALETTE.navy, format: (v) => v.toFixed(0) + "%",
