@@ -3,15 +3,19 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { summarize, summarizeByYear, summarizeYoY } = require("./calc");
+const { summarize, summarizeByYear, summarizeYoY, summarizeQuotations, quoteMonthId } = require("./calc");
 const { buildDeck, buildYoYDeck } = require("./pptx-builder");
+const { readXlsxFirstSheet, excelSerialToDate } = require("./xlsx-lite");
+const { parseCSV } = require("./public/csv.js");
 
 const DATA_FILE = path.join(__dirname, "data.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const PORT = process.env.PORT || 4173;
 
 function readData() {
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  if (!Array.isArray(data.quotations)) data.quotations = [];
+  return data;
 }
 function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
@@ -80,6 +84,53 @@ function filterMonthsByRange(months, from, to) {
   return months.filter((m) => (!from || m.id >= from) && (!to || m.id <= to));
 }
 
+function filterQuotationsByRange(quotations, from, to) {
+  return quotations.filter((q) => {
+    const id = quoteMonthId(q);
+    return (!from || id >= from) && (!to || id <= to);
+  });
+}
+
+// Maps one raw ERP export row (from the "ใบเสนอราคา" quotation report) into our
+// internal quotation record. Blank SaleAreaName ("ช่องทาง") rows are bucketed as
+// "Existing Customers (Not Use)" per how this company's sales team tags repeat business.
+function mapQuotationRow(row, rowNum) {
+  const docuNo = row.DocuNo ? String(row.DocuNo).trim() : "";
+  if (!docuNo) throw new Error(`แถว ${rowNum}: ไม่มีเลขที่ใบเสนอราคา (DocuNo)`);
+
+  let year, month;
+  if (row.DocuDate instanceof Date) {
+    year = row.DocuDate.getUTCFullYear();
+    month = row.DocuDate.getUTCMonth() + 1;
+  } else {
+    const serial = Number(row.DocuDate);
+    if (!isFinite(serial) || serial <= 0) throw new Error(`แถว ${rowNum}: วันที่ (DocuDate) ไม่ถูกต้อง`);
+    const d = excelSerialToDate(serial);
+    year = d.getUTCFullYear();
+    month = d.getUTCMonth() + 1;
+  }
+
+  const channelRaw = row.SaleAreaName ? String(row.SaleAreaName).trim() : "";
+  const value = Number(row.NetAmnt);
+
+  return {
+    docuNo,
+    year,
+    month,
+    channel: channelRaw || "Existing Customers (Not Use)",
+    status: row.QuotStatus ? String(row.QuotStatus).trim() : "ไม่ระบุสถานะ",
+    value: isFinite(value) ? value : 0,
+    custName: row.custName ? String(row.custName).trim() : "",
+  };
+}
+
+function upsertQuotations(data, records) {
+  if (!Array.isArray(data.quotations)) data.quotations = [];
+  const byDocuNo = new Map(data.quotations.map((q) => [q.docuNo, q]));
+  records.forEach((rec) => byDocuNo.set(rec.docuNo, rec));
+  data.quotations = [...byDocuNo.values()];
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const parsedUrl = new URL(req.url, "http://internal");
@@ -92,7 +143,59 @@ const server = http.createServer(async (req, res) => {
       const filteredMonths = filterMonthsByRange(data.months, from, to);
       const summary = summarize({ months: filteredMonths, costItemsByYear: data.costItemsByYear });
       const summaryByYear = summarizeByYear(data); // always full data, ignores period filter
-      return sendJSON(res, 200, { data, summary, summaryByYear });
+      const filteredQuotations = filterQuotationsByRange(data.quotations, from, to);
+      const quotationSummary = summarizeQuotations(filteredQuotations);
+      return sendJSON(res, 200, { data, summary, summaryByYear, quotationSummary });
+    }
+
+    if (url === "/api/quotations/import" && req.method === "POST") {
+      const body = await readBody(req);
+      if (!body.base64) throw new Error("ไม่พบเนื้อหาไฟล์");
+      const buffer = Buffer.from(body.base64, "base64");
+      const filename = String(body.filename || "");
+      const isXlsx = /\.xlsx$/i.test(filename) || (buffer[0] === 0x50 && buffer[1] === 0x4b);
+
+      let rawRows = [];
+      if (isXlsx) {
+        const { rows } = readXlsxFirstSheet(buffer);
+        rawRows = rows;
+      } else {
+        let text = buffer.toString("utf8");
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        rawRows = parseCSV(text);
+      }
+
+      const records = [];
+      const errors = [];
+      rawRows.forEach((row, i) => {
+        try {
+          records.push(mapQuotationRow(row, i + 2));
+        } catch (e) {
+          errors.push(String(e.message || e));
+        }
+      });
+
+      const data = readData();
+      upsertQuotations(data, records);
+      writeData(data);
+      const quotationSummary = summarizeQuotations(data.quotations);
+      return sendJSON(res, 200, {
+        ok: true,
+        totalRows: rawRows.length,
+        imported: records.length,
+        skipped: errors.length,
+        errors: errors.slice(0, 20),
+        data,
+        quotationSummary,
+      });
+    }
+
+    if (url === "/api/quotations" && req.method === "DELETE") {
+      const data = readData();
+      data.quotations = [];
+      writeData(data);
+      const quotationSummary = summarizeQuotations(data.quotations);
+      return sendJSON(res, 200, { ok: true, data, quotationSummary });
     }
 
     if (url === "/api/months" && req.method === "POST") {

@@ -15,6 +15,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="dashboard">แดชบอร์ด</button>
     <button class="tab-btn" data-tab="entry">กรอกข้อมูล</button>
+    <button class="tab-btn" data-tab="quotes">ใบเสนอราคา</button>
     <button class="tab-btn" data-tab="slides">สไลด์สรุป</button>
   </nav>
 
@@ -133,6 +134,45 @@
           <button type="button" class="primary" id="importCostCSVBtn">⬆ นำเข้าจากไฟล์ CSV (แทนที่ปีนี้)</button>
           <input type="file" id="importCostCSVFile" accept=".csv" style="display:none">
         </div>
+      </div>
+    </section>
+
+    <!-- QUOTATIONS -->
+    <section id="tab-quotes" class="tab-panel">
+      <h2>สรุปใบเสนอราคา</h2>
+
+      <div class="csv-box">
+        <div class="csv-box-title">นำเข้าไฟล์ใบเสนอราคาจากระบบ ERP</div>
+        <p class="hint" style="margin-top:0">อัปโหลดไฟล์ export ใบเสนอราคาดิบ (.xlsx หรือ .csv) ที่มีคอลัมน์ DocuDate, DocuNo, SaleAreaName, NetAmnt, QuotStatus ระบบจะสรุปจำนวนใบ/ช่องทาง/มูลค่าให้อัตโนมัติ นำเข้าไฟล์เดิมซ้ำได้ (แถวที่เลขที่ใบเสนอราคาซ้ำจะอัปเดตข้อมูลล่าสุดทับให้ เช่น สถานะเปลี่ยนจาก "รอลูกค้าตัดสินใจ" เป็น "ปิดการขายแล้ว")</p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="button" class="primary" id="importQuotesBtn">⬆ นำเข้าไฟล์ใบเสนอราคา (.xlsx / .csv)</button>
+          <button type="button" class="link danger" id="clearQuotesBtn">ล้างข้อมูลใบเสนอราคาทั้งหมด</button>
+          <input type="file" id="importQuotesFile" accept=".xlsx,.csv" style="display:none">
+        </div>
+      </div>
+
+      <div class="period-filter">
+        <label>ช่วงเวลา:
+          <select id="quotePeriodFrom"></select>
+        </label>
+        <span>ถึง</span>
+        <label>
+          <select id="quotePeriodTo"></select>
+        </label>
+        <button type="button" class="secondary" id="quotePeriodReset">ดูทั้งหมด</button>
+      </div>
+
+      <div id="quotesEmpty" class="empty-state" style="display:none"></div>
+      <div id="quotesContent">
+        <div id="quotesStatCards" class="stat-cards"></div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>จำนวนใบเสนอราคารายเดือน</h3><div id="chartQuoteCount" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>มูลค่าใบเสนอราคารายเดือน (ล้านบาท)</h3><div id="chartQuoteValue" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>สัดส่วนช่องทางที่มาของใบเสนอราคา (จำนวนใบ)</h3><div id="chartQuoteChannel" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>สถานะใบเสนอราคา</h3><div id="chartQuoteStatus" class="chart-canvas"></div></div>
+        </div>
+        <h3 style="margin-top:8px">รายละเอียดตามช่องทาง</h3>
+        <div style="overflow-x:auto"><table id="quoteChannelTable" class="data-table"></table></div>
       </div>
     </section>
 

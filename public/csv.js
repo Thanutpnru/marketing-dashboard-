@@ -102,3 +102,9 @@ function downloadTextFile(filename, text, mime) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+// Dual browser/Node usage: this file is loaded as a plain <script> in the browser
+// (no `module` global there) and also require()'d server-side for parsing CSV imports.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { csvEscape, toCSV, parseCSV };
+}

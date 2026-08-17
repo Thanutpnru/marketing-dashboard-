@@ -244,6 +244,84 @@ function summarizeByYear(data) {
   });
 }
 
+// ---------- Quotations (ใบเสนอราคา) ----------
+// A quotation record: { docuNo, year, month (1-12), channel, status, value, custName? }
+const QUOTE_STATUS_WON = ["ปิดการขายแล้ว"];
+const QUOTE_STATUS_LOST = ["ปิดการขายไม่ได้", "ยกเลิก"];
+
+function quoteMonthId(q) {
+  return `${q.year}-${String(q.month).padStart(2, "0")}`;
+}
+
+function summarizeQuotations(quotations) {
+  const qs = Array.isArray(quotations) ? quotations : [];
+  const n = qs.length;
+  const totalValue = qs.reduce((s, q) => s + num(q.value), 0);
+  const avgValue = n > 0 ? totalValue / n : null;
+
+  const byMonthMap = {};
+  qs.forEach((q) => {
+    const id = quoteMonthId(q);
+    if (!byMonthMap[id]) byMonthMap[id] = { id, year: num(q.year), month: num(q.month), count: 0, value: 0 };
+    byMonthMap[id].count += 1;
+    byMonthMap[id].value += num(q.value);
+  });
+  const byMonth = Object.values(byMonthMap).sort((a, b) => a.year - b.year || a.month - b.month);
+  const multiYear = new Set(byMonth.map((m) => m.year)).size > 1;
+
+  const byChannelMap = {};
+  qs.forEach((q) => {
+    const c = q.channel || "ไม่ระบุ";
+    if (!byChannelMap[c]) byChannelMap[c] = { channel: c, count: 0, value: 0 };
+    byChannelMap[c].count += 1;
+    byChannelMap[c].value += num(q.value);
+  });
+  const byChannel = Object.values(byChannelMap)
+    .map((c) => ({
+      ...c,
+      pctCount: n > 0 ? (c.count / n) * 100 : 0,
+      pctValue: totalValue > 0 ? (c.value / totalValue) * 100 : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const byStatusMap = {};
+  qs.forEach((q) => {
+    const s = q.status || "ไม่ระบุสถานะ";
+    if (!byStatusMap[s]) byStatusMap[s] = { status: s, count: 0, value: 0 };
+    byStatusMap[s].count += 1;
+    byStatusMap[s].value += num(q.value);
+  });
+  const byStatus = Object.values(byStatusMap)
+    .map((s) => ({ ...s, pctCount: n > 0 ? (s.count / n) * 100 : 0 }))
+    .sort((a, b) => b.count - a.count);
+
+  const wonList = qs.filter((q) => QUOTE_STATUS_WON.includes(q.status));
+  const lostList = qs.filter((q) => QUOTE_STATUS_LOST.includes(q.status));
+  const wonCount = wonList.length;
+  const lostCount = lostList.length;
+  const wonValue = wonList.reduce((s, q) => s + num(q.value), 0);
+  const decidedCount = wonCount + lostCount;
+  const winRate = decidedCount > 0 ? (wonCount / decidedCount) * 100 : null;
+
+  const years = [...new Set(qs.map((q) => String(q.year)))].sort();
+
+  return {
+    n,
+    totalValue,
+    avgValue,
+    byMonth,
+    multiYear,
+    byChannel,
+    byStatus,
+    wonCount,
+    lostCount,
+    wonValue,
+    winRate,
+    monthCount: byMonth.length,
+    years,
+  };
+}
+
 module.exports = {
   num,
   costTotals,
@@ -253,6 +331,8 @@ module.exports = {
   summarize,
   summarizeByYear,
   summarizeYoY,
+  quoteMonthId,
+  summarizeQuotations,
   fmtInt,
   fmtMoney,
   fmtPct,

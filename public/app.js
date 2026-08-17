@@ -2,7 +2,7 @@
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-const state = { data: { months: [], costItemsByYear: {} }, summary: null, summaryByYear: [], periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "" };
+const state = { data: { months: [], costItemsByYear: {}, quotations: [] }, summary: null, summaryByYear: [], quotationSummary: null, periodFrom: "", periodTo: "", dashboardMode: "period", costYear: "" };
 
 function fmtInt(n) { return n == null || !isFinite(n) ? "-" : Math.round(n).toLocaleString("en-US"); }
 function fmtMoney(n, d = 2) { return n == null || !isFinite(n) ? "-" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -56,6 +56,7 @@ async function refresh() {
   state.data = j.data;
   state.summary = j.summary;
   state.summaryByYear = j.summaryByYear || [];
+  state.quotationSummary = j.quotationSummary || null;
   renderAll();
 }
 
@@ -75,6 +76,7 @@ function renderAll() {
   safeRender("ตารางข้อมูลรายเดือน", renderMonthTable);
   safeRender("ตัวเลือกปีค่าใช้จ่าย", populateCostYearSelect);
   safeRender("ตารางค่าใช้จ่าย", renderCostTable);
+  safeRender("ใบเสนอราคา", renderQuotesTab);
   safeRender("สไลด์สรุป", renderSlideTab);
   safeRender("สไลด์เปรียบเทียบปีต่อปี", () => {
     if (state.slideMode === "yoy") {
@@ -159,20 +161,29 @@ function sortedFullMonths() {
 }
 
 function populatePeriodSelectors() {
+  // Period options are the union of months that have marketing data AND months that have
+  // quotation data, so the shared period filter works even if only one of the two is filled in yet.
   const months = sortedFullMonths();
-  const opts = months.map((m) => `<option value="${m.id}">${m.month} ${m.year}</option>`).join("");
-  // Two synced pairs: the dashboard tab's selectors and the slide-summary tab's selectors,
-  // both read/write the same state.periodFrom/periodTo so choosing a range in either tab applies everywhere.
-  [["periodFrom", "periodTo"], ["slidePeriodFrom", "slidePeriodTo"]].forEach(([fromId, toId]) => {
+  const optMap = new Map(months.map((m) => [m.id, `${m.month} ${m.year}`]));
+  (state.data.quotations || []).forEach((q) => {
+    const id = `${q.year}-${String(q.month).padStart(2, "0")}`;
+    if (!optMap.has(id)) optMap.set(id, `${THAI_MONTHS[q.month - 1]} ${q.year}`);
+  });
+  const ids = [...optMap.keys()].sort();
+  const opts = ids.map((id) => `<option value="${id}">${optMap.get(id)}</option>`).join("");
+  // Three synced pairs: the dashboard, slide-summary, and quotations tabs each have their own
+  // selectors, all reading/writing the same state.periodFrom/periodTo so choosing a range in
+  // any one tab applies everywhere.
+  [["periodFrom", "periodTo"], ["slidePeriodFrom", "slidePeriodTo"], ["quotePeriodFrom", "quotePeriodTo"]].forEach(([fromId, toId]) => {
     const fromSel = document.getElementById(fromId);
     const toSel = document.getElementById(toId);
     fromSel.innerHTML = opts;
     toSel.innerHTML = opts;
-    if (months.length) {
-      fromSel.value = state.periodFrom || months[0].id;
-      toSel.value = state.periodTo || months[months.length - 1].id;
+    if (ids.length) {
+      fromSel.value = state.periodFrom || ids[0];
+      toSel.value = state.periodTo || ids[ids.length - 1];
     }
-    fromSel.disabled = toSel.disabled = months.length === 0;
+    fromSel.disabled = toSel.disabled = ids.length === 0;
   });
 }
 
@@ -195,6 +206,9 @@ document.getElementById("periodReset").addEventListener("click", onPeriodReset);
 document.getElementById("slidePeriodFrom").addEventListener("change", onPeriodFromChange);
 document.getElementById("slidePeriodTo").addEventListener("change", onPeriodToChange);
 document.getElementById("slidePeriodReset").addEventListener("click", onPeriodReset);
+document.getElementById("quotePeriodFrom").addEventListener("change", onPeriodFromChange);
+document.getElementById("quotePeriodTo").addEventListener("change", onPeriodToChange);
+document.getElementById("quotePeriodReset").addEventListener("click", onPeriodReset);
 
 // ---------- Dashboard ----------
 function statCardEl(big, label) {
@@ -218,6 +232,115 @@ function renderStatCards(containerId) {
 }
 
 const PALETTE = { navy: "#1E2761", terra: "#C1652F", ice: "#CADCFC", gray: "#9AA7C2" };
+
+// ---------- Quotations (ใบเสนอราคา) ----------
+function renderQuotesTab() {
+  const qs = state.quotationSummary;
+  const emptyEl = document.getElementById("quotesEmpty");
+  const contentEl = document.getElementById("quotesContent");
+
+  if (!qs || qs.n === 0) {
+    contentEl.style.display = "none";
+    emptyEl.style.display = "block";
+    emptyEl.textContent = (state.data.quotations || []).length === 0
+      ? 'ยังไม่มีข้อมูลใบเสนอราคา กด "นำเข้าไฟล์ใบเสนอราคา" ด้านบนเพื่อเริ่มต้น'
+      : "ไม่พบใบเสนอราคาในช่วงเวลาที่เลือก ลองปรับช่วงเวลาด้านบน";
+    return;
+  }
+  contentEl.style.display = "block";
+  emptyEl.style.display = "none";
+
+  const cardsEl = document.getElementById("quotesStatCards");
+  cardsEl.innerHTML = "";
+  cardsEl.appendChild(statCardEl(fmtInt(qs.n), `ใบเสนอราคาทั้งหมด (${qs.monthCount} เดือน)`));
+  cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.totalValue)}`, "มูลค่าใบเสนอราคารวม"));
+  cardsEl.appendChild(statCardEl(`฿${fmtInt(qs.avgValue)}`, "มูลค่าเฉลี่ยต่อใบ"));
+  cardsEl.appendChild(statCardEl(
+    qs.winRate == null ? "-" : fmtPct(qs.winRate, 0),
+    `อัตราปิดการขาย (${fmtInt(qs.wonCount)} ปิดได้ / ${fmtInt(qs.wonCount + qs.lostCount)} ที่ตัดสินใจแล้ว)`
+  ));
+
+  const labels = qs.byMonth.map((m) => (qs.multiYear ? `${THAI_MONTHS[m.month - 1]} '${String(m.year + 543).slice(-2)}` : THAI_MONTHS[m.month - 1]));
+  barChart(document.getElementById("chartQuoteCount"), {
+    labels, values: qs.byMonth.map((m) => m.count), color: PALETTE.navy, format: (v) => fmtInt(v),
+  });
+  barChart(document.getElementById("chartQuoteValue"), {
+    labels, values: qs.byMonth.map((m) => m.value / 1e6), color: PALETTE.terra, format: (v) => v.toFixed(1),
+  });
+
+  const channelColors = [PALETTE.navy, PALETTE.terra, PALETTE.ice, PALETTE.gray, "#6B8F71", "#D9A441", "#8E5572", "#4C6E5D"];
+  donutChart(document.getElementById("chartQuoteChannel"), {
+    labels: qs.byChannel.map((c) => c.channel), values: qs.byChannel.map((c) => c.count), colors: channelColors,
+  });
+
+  const statusColors = { "ปิดการขายแล้ว": "#1E7A34", "ปิดการขายไม่ได้": "#B3261E", "ยกเลิก": "#9AA7C2", "รอลูกค้าตัดสินใจ": PALETTE.terra, "ประมูลงาน": PALETTE.navy };
+  donutChart(document.getElementById("chartQuoteStatus"), {
+    labels: qs.byStatus.map((s) => s.status),
+    values: qs.byStatus.map((s) => s.count),
+    colors: qs.byStatus.map((s) => statusColors[s.status] || PALETTE.gray),
+  });
+
+  const table = document.getElementById("quoteChannelTable");
+  const rows = qs.byChannel.map((c) => `
+    <tr>
+      <td>${c.channel}</td>
+      <td style="text-align:right">${fmtInt(c.count)}</td>
+      <td style="text-align:right">${fmtPct(c.pctCount, 1)}</td>
+      <td style="text-align:right">฿${fmtInt(c.value)}</td>
+      <td style="text-align:right">${fmtPct(c.pctValue, 1)}</td>
+    </tr>
+  `).join("");
+  table.innerHTML = `
+    <tr><th>ช่องทาง</th><th>จำนวนใบ</th><th>% ของจำนวน</th><th>มูลค่ารวม</th><th>% ของมูลค่า</th></tr>
+    ${rows}
+  `;
+}
+
+document.getElementById("importQuotesBtn").addEventListener("click", () => {
+  document.getElementById("importQuotesFile").click();
+});
+
+document.getElementById("importQuotesFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const buf = await file.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buf);
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    const base64 = btoa(binary);
+    const r = await fetch("/api/quotations/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, base64 }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "นำเข้าไม่สำเร็จ");
+    toast(`นำเข้าสำเร็จ ${j.imported} ใบ จากทั้งหมด ${j.totalRows} แถว${j.skipped ? ` (ข้าม ${j.skipped} แถวที่มีปัญหา)` : ""}`);
+    if (j.skipped) console.error("Quotation import errors:", j.errors);
+    await refresh();
+  } catch (err) {
+    toast("นำเข้าไฟล์ไม่สำเร็จ: " + err.message, true);
+  } finally {
+    e.target.value = "";
+  }
+});
+
+document.getElementById("clearQuotesBtn").addEventListener("click", async () => {
+  if (!confirm("ต้องการลบข้อมูลใบเสนอราคาทั้งหมดใช่หรือไม่? การกระทำนี้ย้อนกลับไม่ได้")) return;
+  try {
+    const r = await fetch("/api/quotations", { method: "DELETE" });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "ลบไม่สำเร็จ");
+    toast("ลบข้อมูลใบเสนอราคาทั้งหมดเรียบร้อย");
+    await refresh();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
 
 function renderDashboard() {
   const s = state.summary;
