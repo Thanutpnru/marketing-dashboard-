@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>แดชบอร์ดการตลาดดิจิทัล - Metropolitan Products</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">Metropolitan Products</div>
+    <h1>แดชบอร์ดการตลาดดิจิทัล</h1>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">แดชบอร์ด</button>
+    <button class="tab-btn" data-tab="entry">กรอกข้อมูล</button>
+    <button class="tab-btn" data-tab="slides">สไลด์สรุป</button>
+  </nav>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="tab-panel active">
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" data-mode="period">มุมมองรายปี / ช่วงเวลา</button>
+        <button type="button" class="mode-btn" data-mode="compare">เปรียบเทียบระหว่างปี</button>
+      </div>
+
+      <div id="periodView">
+        <div class="period-filter">
+          <label>ช่วงเวลา:
+            <select id="periodFrom"></select>
+          </label>
+          <span>ถึง</span>
+          <label>
+            <select id="periodTo"></select>
+          </label>
+          <button type="button" class="secondary" id="periodReset">ดูทั้งหมด</button>
+        </div>
+        <div id="dashboardEmpty" class="empty-state" style="display:none"></div>
+        <div id="dashboardContent">
+        <div id="costWarningBanner" class="warn-banner" style="display:none"></div>
+        <div id="statCards" class="stat-cards"></div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Site sessions รายเดือน</h3><div id="chartSessions" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>Lead ใหม่จาก LINE OA รายเดือน</h3><div id="chartLeads" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>ยอดขายรวม (ล้านบาท)</h3><div id="chartSales" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>สัดส่วนยอดขายออนไลน์ (%)</h3><div id="chartOnline" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>สัดส่วนช่องทางเข้าเว็บไซต์</h3><div id="chartChannel" class="chart-canvas"></div></div>
+          <div class="chart-card"><h3>ต้นทุนต่อ Lead รายเดือน (บาท)</h3><div id="chartCPL" class="chart-canvas"></div></div>
+          <div class="chart-card wide"><h3>ค่าใช้จ่ายตามรายการ (บาท/ปี)</h3><div id="chartCost" class="chart-canvas"></div></div>
+        </div>
+        </div>
+      </div>
+
+      <div id="compareView" style="display:none">
+        <div id="compareEmpty" class="empty-state" style="display:none"></div>
+        <div id="compareContent">
+          <div class="chart-grid">
+            <div class="chart-card"><h3>Site sessions รวมต่อปี</h3><div id="cmpSessions" class="chart-canvas"></div></div>
+            <div class="chart-card"><h3>Lead ใหม่รวมต่อปี</h3><div id="cmpLeads" class="chart-canvas"></div></div>
+            <div class="chart-card"><h3>ยอดขายรวมต่อปี (ล้านบาท)</h3><div id="cmpSales" class="chart-canvas"></div></div>
+            <div class="chart-card"><h3>งบการตลาดรวมต่อปี (บาท)</h3><div id="cmpSpend" class="chart-canvas"></div></div>
+            <div class="chart-card"><h3>ROAS ต่อปี (เท่า)</h3><div id="cmpRoas" class="chart-canvas"></div></div>
+            <div class="chart-card"><h3>ต้นทุนเฉลี่ยต่อ Lead ต่อปี (บาท)</h3><div id="cmpCPL" class="chart-canvas"></div></div>
+          </div>
+          <div style="overflow-x:auto"><table id="compareTable" class="data-table" style="margin-top:20px"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DATA ENTRY -->
+    <section id="tab-entry" class="tab-panel">
+      <h2>เพิ่ม / แก้ไขข้อมูลรายเดือน</h2>
+      <form id="monthForm" class="card-form">
+        <label>ปี (พ.ศ. หรือ ค.ศ.)<input type="number" id="f_year" required></label>
+        <label>เดือน
+          <select id="f_order" required></select>
+        </label>
+        <label>New visitor (%)<input type="number" step="0.1" id="f_newPct" required></label>
+        <label>Returning (%)<input type="number" step="0.1" id="f_returningPct" required></label>
+        <label>Site sessions<input type="number" id="f_sessions" required></label>
+        <label>Channel - Organic<input type="number" id="f_channelOrganic" required></label>
+        <label>Channel - Paid<input type="number" id="f_channelPaid" required></label>
+        <label>Channel - Direct<input type="number" id="f_channelDirect" required></label>
+        <label>Channel - AI<input type="number" id="f_channelAI" required></label>
+        <label>New Lead (LINE)<input type="number" id="f_newLeadLine" required></label>
+        <label>User สะสม (LINE)<input type="number" id="f_userLine" required></label>
+        <label>ยอดขายออนไลน์ (บาท)<input type="number" step="0.01" id="f_salesOnline" required></label>
+        <label>ยอดขายรวม (บาท)<input type="number" step="0.01" id="f_salesAmount" required></label>
+        <div class="form-actions">
+          <button type="submit" class="primary">บันทึกข้อมูลเดือนนี้</button>
+          <button type="button" class="secondary" id="clearForm">ล้างฟอร์ม</button>
+        </div>
+      </form>
+      <p class="hint">กรอกข้อมูลปี+เดือนซ้ำกับที่มีอยู่แล้ว ระบบจะอัปเดตทับข้อมูลเดิมของเดือนนั้นให้อัตโนมัติ</p>
+
+      <div class="csv-box">
+        <div class="csv-box-title">เพิ่มข้อมูลทีละหลายเดือนด้วยไฟล์ CSV</div>
+        <p class="hint" style="margin-top:0">ดาวน์โหลด Template เปิดกรอกใน Excel/Google Sheets ได้หลายเดือนพร้อมกัน แล้วอัปโหลดกลับเข้าระบบทีเดียว (แถวที่ปี+เดือนซ้ำกับข้อมูลเดิมจะอัปเดตทับให้อัตโนมัติเหมือนกรอกผ่านฟอร์ม)</p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="button" class="secondary" id="downloadMonthTemplate">⬇ ดาวน์โหลด Template ว่าง (CSV)</button>
+          <button type="button" class="secondary" id="downloadMonthCurrent">⬇ ดาวน์โหลดข้อมูลปัจจุบันเป็น CSV</button>
+          <button type="button" class="primary" id="importMonthCSVBtn">⬆ นำเข้าจากไฟล์ CSV</button>
+          <input type="file" id="importMonthCSVFile" accept=".csv" style="display:none">
+        </div>
+      </div>
+
+      <h2>ข้อมูลที่บันทึกไว้</h2>
+      <div style="overflow-x:auto"><table id="monthTable" class="data-table"></table></div>
+
+      <h2>ค่าใช้จ่ายการตลาด</h2>
+      <p class="hint">ค่าใช้จ่ายกำหนดแยกตามปี เพราะแต่ละปีอาจมีรายการหรืองบไม่เท่ากัน เลือกปีที่ต้องการกรอก/แก้ไขด้านล่าง</p>
+      <div class="period-filter">
+        <label>ปีที่แก้ไขค่าใช้จ่าย:
+          <select id="costYearSelect"></select>
+        </label>
+        <button type="button" class="secondary" id="addCostYear">+ เพิ่มปีใหม่</button>
+        <button type="button" class="link danger" id="deleteCostYear">ลบข้อมูลค่าใช้จ่ายปีนี้ทั้งหมด</button>
+      </div>
+      <div style="overflow-x:auto"><table id="costTable" class="data-table"></table></div>
+      <div class="form-actions" style="margin-bottom:16px">
+        <button type="button" class="secondary" id="addCostRow">+ เพิ่มรายการค่าใช้จ่าย</button>
+        <button type="button" class="primary" id="saveCostItems">บันทึกค่าใช้จ่ายปีนี้</button>
+      </div>
+
+      <div class="csv-box" style="margin-bottom:24px">
+        <div class="csv-box-title">เพิ่ม/แก้ไขรายการค่าใช้จ่ายด้วยไฟล์ CSV</div>
+        <p class="hint" style="margin-top:0">ไฟล์มีคอลัมน์ "ปี" ในตัว จึงกรอกได้หลายปีพร้อมกันในไฟล์เดียว การนำเข้าจะ<b>แทนที่รายการค่าใช้จ่ายทั้งหมดของปีที่ปรากฏในไฟล์</b>ด้วยข้อมูลในไฟล์นั้น (ปีอื่นที่ไม่ได้อยู่ในไฟล์จะไม่ถูกแตะต้อง)</p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="button" class="secondary" id="downloadCostTemplate">⬇ ดาวน์โหลด Template ว่าง (CSV)</button>
+          <button type="button" class="secondary" id="downloadCostCurrent">⬇ ดาวน์โหลดรายการทุกปีเป็น CSV</button>
+          <button type="button" class="primary" id="importCostCSVBtn">⬆ นำเข้าจากไฟล์ CSV (แทนที่ปีนี้)</button>
+          <input type="file" id="importCostCSVFile" accept=".csv" style="display:none">
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE SUMMARY -->
+    <section id="tab-slides" class="tab-panel">
+      <h2>สรุปสำหรับผู้บริหาร</h2>
+
+      <div class="mode-toggle">
+        <button type="button" class="slidemode-btn active" data-slidemode="period">รายงานปกติ (ตามช่วงเวลา)</button>
+        <button type="button" class="slidemode-btn" data-slidemode="yoy">เปรียบเทียบปีต่อปี</button>
+      </div>
+
+      <div id="slidePeriodModeBox">
+        <div class="period-filter">
+          <label>ช่วงเวลา:
+            <select id="slidePeriodFrom"></select>
+          </label>
+          <span>ถึง</span>
+          <label>
+            <select id="slidePeriodTo"></select>
+          </label>
+          <button type="button" class="secondary" id="slidePeriodReset">ดูทั้งหมด</button>
+        </div>
+        <p class="hint" id="slidePeriodNote">เลือกช่วงเวลาที่ต้องการสรุปได้จากด้านบน (ใช้ช่วงเดียวกับแท็บแดชบอร์ด)</p>
+        <div id="slideEmpty" class="empty-state" style="display:none"></div>
+        <div id="slideContent">
+        <div id="statCardsSlide" class="stat-cards"></div>
+        <div id="slideSummaryText" class="slide-summary-box"></div>
+        <button id="exportPptx" class="primary">📊 ดาวน์โหลดสไลด์สรุป (.pptx, 11 หน้า)</button>
+        <p class="hint">ไฟล์ .pptx จะถูกสร้างใหม่จากข้อมูลตามช่วงเวลาที่เลือกไว้ทุกครั้งที่กด</p>
+        </div>
+      </div>
+
+      <div id="slideYoYModeBox" style="display:none">
+        <p class="hint">เปรียบเทียบปีที่เลือกกับปีก่อนหน้า โดยใช้เฉพาะช่วงเดือนที่มีข้อมูลตรงกันทั้งสองปี (เช่น ถ้าปีล่าสุดมีถึงแค่ ก.ค. จะเทียบแค่ ม.ค.–ก.ค. ของทั้งสองปี) เพื่อไม่ให้ปีที่ข้อมูลยังไม่ครบเสียเปรียบ</p>
+        <div class="period-filter">
+          <label>ปีที่ต้องการโฟกัส (เทียบกับปีก่อนหน้า):
+            <select id="yoyFocusYear"></select>
+          </label>
+        </div>
+        <div id="yoyEmpty" class="empty-state" style="display:none"></div>
+        <div id="yoyContent" style="display:none">
+          <div id="yoySummaryBox" class="yoy-summary-box"></div>
+          <button id="exportYoYPptx" class="primary">📊 ดาวน์โหลดสไลด์เปรียบเทียบปีต่อปี (.pptx, 6 หน้า)</button>
+          <p class="hint">ไฟล์ .pptx จะถูกสร้างใหม่ตามปีที่เลือกไว้ทุกครั้งที่กด</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="charts.js"></script>
+  <script src="csv.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

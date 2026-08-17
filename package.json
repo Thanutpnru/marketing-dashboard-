@@ -1,0 +1,15 @@
+{
+  "name": "marketing-dashboard",
+  "version": "1.0.0",
+  "description": "Digital marketing dashboard, data entry, and executive PPTX export for Metropolitan Products",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
