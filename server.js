@@ -284,7 +284,9 @@ const server = http.createServer(async (req, res) => {
       const filteredMonths = filterMonthsByRange(data.months, from, to);
       const filteredData = { ...data, months: filteredMonths };
       const summary = summarize(filteredData);
-      const buffer = await buildDeck(filteredData, summary);
+      const filteredQuotations = filterQuotationsByRange(data.quotations, from, to);
+      const quotationSummary = summarizeQuotations(filteredQuotations);
+      const buffer = await buildDeck(filteredData, summary, quotationSummary);
       res.writeHead(200, {
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": 'attachment; filename="digital_marketing_summary.pptx"',

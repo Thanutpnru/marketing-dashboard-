@@ -13,6 +13,7 @@ const GRAY = "5B6472";
 const FONT = "Tahoma";
 const PGW = 13.3;
 const PGH = 7.5;
+const THAI_MONTHS_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 function addFooter(s, pageNum, dark, subtitle) {
   s.addText(subtitle || "สรุปผลการตลาดดิจิทัล", {
@@ -83,9 +84,10 @@ function motifCircles(s, dark) {
   });
 }
 
-async function buildDeck(data, summary) {
+async function buildDeck(data, summary, quotationSummary) {
   const pres = new pptxgen();
   pres.layout = "LAYOUT_WIDE";
+  let pageNum = 1;
 
   const multiYear = (summary.yearsInRange || []).length > 1;
   const MONTHS = summary.months.map((m) => (multiYear ? `${m.month} '${String(m.year + 543).slice(-2)}` : m.month));
@@ -163,7 +165,7 @@ async function buildDeck(data, summary) {
         fontFace: FONT, fontSize: 13.5, color: WHITE, align: "left", margin: 0, valign: "top", lineSpacingMultiple: 1.15,
       }
     );
-    addFooter(s, 2, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 3: Cost breakdown (year-aware) ----------
@@ -306,7 +308,7 @@ async function buildDeck(data, summary) {
       }
       bulletList(s, 0.6, 5.65, PGW - 1.2, 1.5, bullets, { fontSize: 13 });
     }
-    addFooter(s, 3, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 4: Traffic & Lead growth ----------
@@ -362,7 +364,7 @@ async function buildDeck(data, summary) {
       ].filter(Boolean),
       { fontSize: 13 }
     );
-    addFooter(s, 4, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 5: Channel mix ----------
@@ -398,7 +400,7 @@ async function buildDeck(data, summary) {
       ],
       { fontSize: 13 }
     );
-    addFooter(s, 5, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 6: Cost efficiency ----------
@@ -437,7 +439,7 @@ async function buildDeck(data, summary) {
       ].filter(Boolean),
       { fontSize: 13.5 }
     );
-    addFooter(s, 6, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 7: Sales performance & online contribution ----------
@@ -495,7 +497,7 @@ async function buildDeck(data, summary) {
       ].filter(Boolean),
       { fontSize: 13 }
     );
-    addFooter(s, 7, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 8: Key insight (auto anomaly detection) ----------
@@ -532,7 +534,7 @@ async function buildDeck(data, summary) {
           "แนะนำให้ติดตาม pipeline ฝั่ง offline คู่ขนานกับตัวชี้วัดดิจิทัล เพื่อประเมินภาพรวมยอดขายได้แม่นยำขึ้น",
         ];
     bulletList(s, 0.6, 3.5, PGW - 1.2, 3.3, bullets, { fontSize: 14, color: NAVY });
-    addFooter(s, 8, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 9: ROI ----------
@@ -568,7 +570,196 @@ async function buildDeck(data, summary) {
       ],
       { fontSize: 14, color: WHITE }
     );
-    addFooter(s, 9, true, footerSub);
+    addFooter(s, ++pageNum, true, footerSub);
+  }
+
+  // ---------- Slide: Quotation summary (only if quotation data exists in range) ----------
+  const qs = quotationSummary;
+  if (qs && qs.n > 0) {
+    // Group channels under 2% of total quote count into "อื่นๆ" so tables/charts stay readable —
+    // mirrors the same grouping rule used in the web app's quotations tab.
+    const groupChannels = (byChannel, totalCount) => {
+      const big = [];
+      const small = [];
+      byChannel.forEach((c) => {
+        const pct = totalCount > 0 ? (c.count / totalCount) * 100 : 0;
+        (pct >= 2 ? big : small).push(c);
+      });
+      if (!small.length) return { big, others: null };
+      const merged = small.reduce((acc, c) => {
+        acc.count += c.count;
+        acc.value += c.value;
+        acc.wonCount += c.wonCount;
+        acc.wonValue += c.wonValue;
+        acc.members.push(c.channel);
+        return acc;
+      }, { channel: "อื่นๆ (ช่องทางสัดส่วนน้อย)", count: 0, value: 0, wonCount: 0, wonValue: 0, members: [] });
+      merged.pctCount = totalCount > 0 ? (merged.count / totalCount) * 100 : 0;
+      merged.closeRate = merged.count > 0 ? (merged.wonCount / merged.count) * 100 : 0;
+      return { big, others: merged };
+    };
+    const { big: bigChannels, others: otherChannels } = groupChannels(qs.byChannel, qs.n);
+    const meaningfulChannels = bigChannels.filter((c) => c.count >= 5).sort((a, b) => b.closeRate - a.closeRate);
+
+    const qMultiYear = qs.multiYear;
+    const qLabels = qs.byMonth.map((m) => (qMultiYear ? `${THAI_MONTHS_SHORT[m.month - 1]} '${String(m.year + 543).slice(-2)}` : THAI_MONTHS_SHORT[m.month - 1]));
+    const qDateRange = qs.byMonth.length
+      ? (qMultiYear
+          ? `${THAI_MONTHS_SHORT[qs.byMonth[0].month - 1]} ${qs.byMonth[0].year + 543} – ${THAI_MONTHS_SHORT[qs.byMonth[qs.byMonth.length - 1].month - 1]} ${qs.byMonth[qs.byMonth.length - 1].year + 543}`
+          : `${THAI_MONTHS_SHORT[qs.byMonth[0].month - 1]} – ${THAI_MONTHS_SHORT[qs.byMonth[qs.byMonth.length - 1].month - 1]} ${qs.byMonth[0].year + 543}`)
+      : "";
+
+    // ---- Slide: Quotation summary ----
+    {
+      const s = pres.addSlide();
+      s.background = { color: WHITE };
+      sectionHeader(s, "สรุปใบเสนอราคา", `ภาพรวม ${qs.monthCount} เดือน (${qDateRange})`);
+
+      const cardY = 1.65, cardH = 1.35, gap = 0.35;
+      const cardW = (PGW - 1.2 - gap * 3) / 4;
+      const stats = [
+        [`${fmtInt(qs.n)} ใบ`, `ใบเสนอราคาทั้งหมด (${qs.monthCount} เดือน)`],
+        [`฿${fmtInt(qs.totalValue)}`, "มูลค่าใบเสนอราคารวม"],
+        [qs.winRate == null ? "-" : fmtPct(qs.winRate, 0), `อัตราปิดการขาย - นับจำนวนใบ (${fmtInt(qs.wonCount)}/${fmtInt(qs.n)})`],
+        [qs.valueWinRate == null ? "-" : fmtPct(qs.valueWinRate, 1), "อัตราปิดการขาย - ตามมูลค่า"],
+      ];
+      stats.forEach((st, i) => statCard(s, 0.6 + i * (cardW + gap), cardY, cardW, cardH, st[0], st[1]));
+
+      const chartY = cardY + cardH + 0.35, chartH = 2.55, chartGap = 0.4;
+      const chartW = (PGW - 1.2 - chartGap) / 2;
+      s.addChart(
+        pres.ChartType.bar,
+        [{ name: "ใบเสนอราคา", labels: qLabels, values: qs.byMonth.map((m) => m.count) }],
+        {
+          x: 0.6, y: chartY, w: chartW, h: chartH,
+          chartColors: [NAVY],
+          showTitle: true, title: "จำนวนใบเสนอราคารายเดือน", titleFontSize: 11.5, titleColor: NAVY, titleFontFace: FONT,
+          showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 8.5, dataLabelColor: NAVY, dataLabelFontFace: FONT,
+          showLegend: false,
+          catAxisLabelColor: NAVY, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 8.5,
+          valAxisLabelColor: GRAY, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 8.5,
+          valGridLine: { color: "E4E9F2", size: 1 },
+          catGridLine: { style: "none" },
+        }
+      );
+      s.addChart(
+        pres.ChartType.line,
+        [{ name: "% ปิดการขาย", labels: qLabels, values: qs.byMonth.map((m) => Math.round(m.closeRate * 10) / 10) }],
+        {
+          x: 0.6 + chartW + chartGap, y: chartY, w: chartW, h: chartH,
+          chartColors: [TERRA],
+          lineSize: 2.5,
+          showTitle: true, title: "% อัตราปิดการขายรายเดือน", titleFontSize: 11.5, titleColor: NAVY, titleFontFace: FONT,
+          showValue: true, dataLabelPosition: "t", dataLabelFontSize: 8.5, dataLabelColor: NAVY, dataLabelFontFace: FONT,
+          dataLabelFormatCode: '0"%"',
+          showLegend: false,
+          catAxisLabelColor: NAVY, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 8.5,
+          valAxisLabelColor: GRAY, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 8.5,
+          valGridLine: { color: "E4E9F2", size: 1 },
+          catGridLine: { style: "none" },
+          valAxisMinVal: 0,
+        }
+      );
+
+      const boxY = chartY + chartH + 0.3, boxH = 1.55;
+      s.addShape("roundRect", {
+        x: 0.6, y: boxY, w: PGW - 1.2, h: boxH, rectRadius: 0.08,
+        fill: { color: NAVY }, line: { type: "none" },
+      });
+      s.addText("ทำไมอัตราปิดการขาย 2 แบบถึงต่างกัน", {
+        x: 0.95, y: boxY + 0.17, w: 8, h: 0.3,
+        fontFace: FONT, fontSize: 12.5, bold: true, color: TERRA, margin: 0,
+      });
+      const gap2 = (qs.winRate || 0) - (qs.valueWinRate || 0);
+      const gapTxt = Math.abs(gap2) >= 3
+        ? (gap2 > 0
+            ? `ใบที่ปิดได้ส่วนใหญ่มีมูลค่าต่อใบเล็กกว่าค่าเฉลี่ยของใบเสนอราคาทั้งหมด (ต่างกัน ${fmtPct(Math.abs(gap2), 1)}) ส่วนใบมูลค่าสูงยังปิดได้ไม่ค่อยดี`
+            : `ใบที่ปิดได้ส่วนใหญ่มีมูลค่าต่อใบใหญ่กว่าค่าเฉลี่ย (ต่างกัน ${fmtPct(Math.abs(gap2), 1)}) ทีมขายจับดีลก้อนใหญ่ได้ดี`)
+        : "ขนาดของใบเสนอราคาที่ปิดได้กับปิดไม่ได้ใกล้เคียงกัน ไม่มีความเบี่ยงเบนจากขนาดดีล";
+      s.addText(
+        `อัตราปิดการขายแบบนับจำนวนใบอยู่ที่ ${qs.winRate == null ? "-" : fmtPct(qs.winRate, 1)} แต่แบบมูลค่า (ปิดได้กี่บาทจากที่เสนอไป) อยู่ที่ ${qs.valueWinRate == null ? "-" : fmtPct(qs.valueWinRate, 1)} เท่านั้น ` +
+        `(ปิดได้ ฿${fmtInt(qs.wonValue)} จากมูลค่าที่เสนอทั้งหมด ฿${fmtInt(qs.totalValue)}) — ${gapTxt}`,
+        {
+          x: 0.95, y: boxY + 0.5, w: PGW - 1.9, h: boxH - 0.65,
+          fontFace: FONT, fontSize: 12.5, color: WHITE, align: "left", margin: 0, valign: "top", lineSpacingMultiple: 1.15,
+        }
+      );
+      addFooter(s, ++pageNum, false, footerSub);
+    }
+
+    // ---- Slide: Quotation channel effectiveness ----
+    {
+      const s = pres.addSlide();
+      s.background = { color: WHITE };
+      sectionHeader(s, "ประสิทธิภาพตามช่องทาง", "จำนวนใบ มูลค่า และอัตราปิดการขายแยกตามช่องทาง");
+
+      const tableChannels = otherChannels ? [...bigChannels, otherChannels] : bigChannels;
+      const tableRows = [
+        [
+          { text: "ช่องทาง", options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11.5, fontFace: FONT, valign: "middle" } },
+          { text: "จำนวนใบ", options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11.5, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: "% ของจำนวน", options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11.5, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: "ปิดได้", options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11.5, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: "% ปิดได้", options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11.5, fontFace: FONT, align: "right", valign: "middle" } },
+        ],
+      ];
+      tableChannels.forEach((c, i) => {
+        const rowFill = i % 2 === 0 ? WHITE : ICE_LIGHT;
+        tableRows.push([
+          { text: c.channel, options: { color: NAVY, fill: { color: rowFill }, fontSize: 11, fontFace: FONT, valign: "middle" } },
+          { text: fmtInt(c.count), options: { color: NAVY, fill: { color: rowFill }, fontSize: 11, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: fmtPct(c.pctCount, 1), options: { color: NAVY, fill: { color: rowFill }, fontSize: 11, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: fmtInt(c.wonCount), options: { color: NAVY, fill: { color: rowFill }, fontSize: 11, fontFace: FONT, align: "right", valign: "middle" } },
+          { text: fmtPct(c.closeRate, 1), options: { color: NAVY, fill: { color: rowFill }, fontSize: 11, fontFace: FONT, align: "right", valign: "middle" } },
+        ]);
+      });
+      s.addTable(tableRows, {
+        x: 0.6, y: 1.65, w: 6.3, h: 3.7,
+        colW: [2.5, 1.0, 1.1, 0.85, 0.85],
+        border: { type: "solid", color: "E4E9F2", pt: 0.75 },
+        autoPage: false,
+        rowH: 0.42,
+      });
+
+      if (meaningfulChannels.length) {
+        s.addChart(
+          pres.ChartType.bar,
+          [{ name: "% ปิดการขาย", labels: meaningfulChannels.map((c) => c.channel), values: meaningfulChannels.map((c) => Math.round(c.closeRate * 10) / 10) }],
+          {
+            x: 7.15, y: 1.65, w: 5.55, h: 3.7,
+            barDir: "bar",
+            chartColors: [TERRA],
+            showTitle: true, title: "% อัตราปิดการขายตามช่องทาง", titleFontSize: 11.5, titleColor: NAVY, titleFontFace: FONT,
+            showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 9, dataLabelColor: NAVY, dataLabelFontFace: FONT,
+            dataLabelFormatCode: '0"%"',
+            showLegend: false,
+            catAxisLabelColor: NAVY, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 9,
+            valAxisLabelColor: GRAY, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 8.5,
+            valGridLine: { color: "E4E9F2", size: 1 },
+            catGridLine: { style: "none" },
+          }
+        );
+      }
+
+      const topVolume = [...qs.byChannel].sort((a, b) => b.count - a.count)[0];
+      const bullets = [];
+      if (topVolume) {
+        bullets.push(`ช่องทางที่มีจำนวนใบเสนอราคามากที่สุดคือ "${topVolume.channel}" คิดเป็น ${fmtPct(topVolume.pctCount, 0)} ของทั้งหมด (${fmtInt(topVolume.count)} ใบ)`);
+      }
+      if (meaningfulChannels.length) {
+        const best = meaningfulChannels[0];
+        bullets.push(`ช่องทางที่มีประสิทธิภาพสูงสุด (อัตราปิดการขาย) คือ "${best.channel}" ที่ ${fmtPct(best.closeRate, 0)} จาก ${fmtInt(best.count)} ใบ`);
+        const worst = meaningfulChannels[meaningfulChannels.length - 1];
+        if (worst !== best) {
+          bullets.push(`ช่องทางที่ต่ำสุด (ในกลุ่มที่มีจำนวนใบมากพอจะเทียบได้) คือ "${worst.channel}" ที่ ${fmtPct(worst.closeRate, 0)} จาก ${fmtInt(worst.count)} ใบ`);
+        }
+      }
+      if (otherChannels) {
+        bullets.push(`มี ${otherChannels.members.length} ช่องทางที่จำนวนใบน้อย ถูกจัดกลุ่มเป็น "อื่นๆ" (รวมกัน ${fmtInt(otherChannels.count)} ใบ) ได้แก่ ${otherChannels.members.join(", ")}`);
+      }
+      bulletList(s, 0.6, 5.6, PGW - 1.2, 1.5, bullets, { fontSize: 12.5 });
+      addFooter(s, ++pageNum, false, footerSub);
+    }
   }
 
   // ---------- Slide 10: Risks & Recommendations ----------
@@ -605,7 +796,7 @@ async function buildDeck(data, summary) {
         fontFace: FONT, fontSize: 13, color: GRAY, margin: 0, lineSpacingMultiple: 1.15,
       });
     });
-    addFooter(s, 10, false, footerSub);
+    addFooter(s, ++pageNum, false, footerSub);
   }
 
   // ---------- Slide 11: Closing / Next steps ----------
